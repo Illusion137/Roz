@@ -9,12 +9,15 @@
     "console-log-colors": "^0.4.0",
     "docx": "^8.5.0",
     "fs": "^0.0.1-security",
+    "fs-extra": "^11.2.0",
     "get-audio-duration": "^4.0.1",
+    "http": "^0.0.1-security",
     "jsdom": "^24.0.0",
     "mammoth": "^1.7.0",
     "pdf-parse": "^1.1.1",
     "pdf2json": "^3.0.5",
     "puppeteer": "^22.0.0",
+    "puppeteer-core": "^22.5.0",
     "say": "^0.16.0"
   }
 }
