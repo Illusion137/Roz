@@ -1,0 +1,20 @@
+{
+  "dependencies": {
+    "@kreisler/js-google-translate-free": "^2.0.2",
+    "@types/cli-progress": "^3.11.5",
+    "@types/jsdom": "^21.1.6",
+    "axios": "^1.6.7",
+    "chrome-cookies-secure": "^2.1.1",
+    "cli-progress": "^3.12.0",
+    "console-log-colors": "^0.4.0",
+    "docx": "^8.5.0",
+    "fs": "^0.0.1-security",
+    "get-audio-duration": "^4.0.1",
+    "jsdom": "^24.0.0",
+    "mammoth": "^1.7.0",
+    "pdf-parse": "^1.1.1",
+    "pdf2json": "^3.0.5",
+    "puppeteer": "^22.0.0",
+    "say": "^0.16.0"
+  }
+}
