@@ -1,6 +1,5 @@
-import assert from "assert";
 import * as fs from "fs";
-import puppeteer, { Page } from "puppeteer-core";
+import puppeteer, { HTTPResponse, Page } from "puppeteer-core";
 import axios from "axios";
 import { JSDOM } from "jsdom";
 import { spawn } from "child_process";
@@ -15,7 +14,7 @@ import {
     gray,
     bold,
 } from "console-log-colors";
-import { getCookies, getCookiesPromised } from "chrome-cookies-secure";
+// import { PuppeteerCookie, getCookies, getCookiesPromised } from "chrome-cookies-secure";
 import { SingleBar } from "cli-progress";
 import * as docx from "docx";
 import Pdfparser from "pdf2json";
@@ -98,7 +97,7 @@ const options = {
     translate: false,
     cover: "temp/img/cover.jpg",
     voice: null,
-    speed: 2,
+    speed: 1,
     pdf_margin: [0, 48],
     pdf_start: 0
 };
@@ -117,10 +116,9 @@ async function get_uuids(main_page: Page): Promise<string[]> {
     });
     //Get latest chapter UUIDS
     //Substract more for different volumes: -1 == latest volume
-    console.log(cuuid);
     fs.writeFileSync("temp/docs/jnovel-toc.json", JSON.stringify(data_toc_json));
-    const volume_parts: JNovelChapter[] =
-        data_toc_json[data_toc_json.length - 1].chapters;
+    const index = data_toc_json.findIndex(volume => volume.chapters.findIndex(chapter => chapter.uuid === "65dcd648cb5d7e876e6d2cef") != -1);
+    const volume_parts: JNovelChapter[] = data_toc_json[index].chapters;
     const volume_part_uuids: string[] = [];
     for (const volume_part of volume_parts)
         if (volume_part.selected != true)
@@ -140,14 +138,14 @@ async function parse_part(part_page: Page): Promise<string> {
                 switch (element.nodeName) {
                     case "IMG": break; //Ignore for now
                     case "H1":
-                        if(!first) content += chapter_break();
+                        if(!first) content += "[------------------------------------------------]" + "\n";
                         else first = false;
-                        content += element.textContent as string
+                        content += element.textContent as string + '\n'
                         break;
                     case "P":
-                        content += element.textContent as string
+                        content += element.textContent as string + '\n'
                         break;
-                    default: assert(false, "Unknown: " + element.nodeName);
+                    default: log_error("Unknown: " + element.nodeName); process.exit(1);
                 }
             }
         }
@@ -161,7 +159,7 @@ async function parse_jnovel(entry_point_url: string): Promise<string> {
         format:
             "Preload |" +
             cyan("{bar}") +
-            "| {percentage}%",
+            "| {percentage}%\n",
         barCompleteChar: "\u2588",
         barIncompleteChar: "\u2591",
         hideCursor: true,
@@ -170,7 +168,7 @@ async function parse_jnovel(entry_point_url: string): Promise<string> {
         format:
             "JNovel Progress |" +
             cyan("{bar}") +
-            "| {percentage}% || {value}/{total} Parts",
+            "| {percentage}% || {value}/{total} Parts\n",
         barCompleteChar: "\u2588",
         barIncompleteChar: "\u2591",
         hideCursor: true,
@@ -178,11 +176,36 @@ async function parse_jnovel(entry_point_url: string): Promise<string> {
     sprogress_bar.start(4, 0);
     const BASE_URL = "https://labs.j-novel.club/embed/";
     const jparts: string[] = [];
-    const cookies = await getCookiesPromised(BASE_URL, 'puppeteer');
+    const cookies = [
+        {
+            "name": "__stripe_mid",
+            "value": "e071e076-4a2c-442d-89b7-2113e3ae32a424de6c",
+            "domain": "labs.j-novel.club"
+        },
+        {
+            "name": "device",
+            "value": "01HP864XJ46DMZYVPE272NXQBF",
+            "domain": "labs.j-novel.club"
+        },
+        {
+            "name": "access_token",
+            "value": "s%3Ad0FtpXQq0XNNmufhcfkEWx6aVZhgAr2DRa2jumahNXTBescvi1PfGtW907MaFYiW.UAlris02lkyrJq5HStU4W4MyizKIrjs7RMwmGonvDEU",
+            "domain": "labs.j-novel.club"
+        },
+        {
+            "name": "userId",
+            "value": "s%3A65c6c12d402b76e824a6d9b0.XRP9QvOfqtP6Zmf3hRw%2Byo1q1v2cP4N7yIABQMwxlB0",
+            "domain": "labs.j-novel.club"
+        }
+    ]
     sprogress_bar.increment();
     const browser = await puppeteer.launch({
         headless: true,
-        executablePath: options.chrome_executable_path
+        executablePath: options.chrome_executable_path,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        // args:['--user-data-dir="=%userprofile%\\AppData\\Local\\Chrome\\User Data']
+        
+        // userDataDir: "C:\\Users\\raygo\\AppData\\Local\\Google\\Chrome\\User Data\\"
     });
     sprogress_bar.increment();
     const page = await browser.newPage();
@@ -193,13 +216,14 @@ async function parse_jnovel(entry_point_url: string): Promise<string> {
     await page.setViewport({ width: 1080, height: 1024 });
 
     const uuids: string[] = await get_uuids(page);
+    log_info("Found UUIDS:" + JSON.stringify(uuids));
+    
     sprogress_bar.increment();
-    jprogress_bar.start(uuids.length, 0);
+
+    jprogress_bar.start(uuids.length + 1, 0);
     
     jparts.push(await parse_part(page));
     jprogress_bar.increment();
-
-    log_info("Found UUIDS:" + JSON.stringify(uuids));
 
     for (const uuid of uuids) {
         const page = await browser.newPage();
@@ -245,7 +269,6 @@ async function translate_document(document: docx.Document | string) {
         typeof document == "string" ? document : "temp/downloads/translate.docx";
     if (typeof document != "string")
         fs.writeFileSync(temp_translate_file_path, await docx_buffer(document));
-    );
 
     const browser = await puppeteer.launch({
         devtools: true,
@@ -337,7 +360,7 @@ async function parse_webnovel(web_novel_id: string, range_start: number, range_e
         format:
             "WebNovel Progress |" +
             cyan("{bar}") +
-            "| {percentage}% || {value}/{total} Chapters",
+            "| {percentage}% || {value}/{total} Chapters\n",
         barCompleteChar: "\u2588",
         barIncompleteChar: "\u2591",
         hideCursor: true,
@@ -390,7 +413,7 @@ async function parse_pdf(file_path_or_url: string): Promise<string> {
         const file = fs.createWriteStream(dpath);
         const request = new Promise((resolve, reject) => {
             http.get(file_path_or_url, function(response) {
-                response.pipe(file);
+                // response.pipe(file);
                 resolve(0);
             });
         });
@@ -428,7 +451,7 @@ async function read_text(file_path_or_url: string): Promise<string> {
         const file = fs.createWriteStream(dpath);
         const request = new Promise((resolve, reject) => {
             http.get(file_path_or_url, function(response) {
-                response.pipe(file);
+                // response.pipe(file);
                 resolve(0);
             });
         });
@@ -491,10 +514,10 @@ function timestamp_to_string(t_seconds: number) {
 async function get_voices(): Promise<string[]> {
     let vlist: string[] = [];
     const promise = new Promise((resolve, reject) => {
-        // say.getInstalledVoices((err, voices) => {
-        // vlist = voices;
+        say.getInstalledVoices((err, voices) => {
+        vlist = voices;
         resolve(0);
-        // });
+        });
     });
     await promise;
     return vlist;
@@ -504,12 +527,12 @@ async function build_audio(){
     const arg_list = [
         "-f", "concat",
         "-safe", "0",
-        "-i", "temp/ffmpeg/audio_list.txt", 
+        "-i", "temp/audio_list.txt", 
         "-c", "copy", 
         "out/merged.wav"
     ]
     const promise = new Promise((resolve, reject) => {
-        const merge_audio = spawn("ffmpeg", arg_list, {'stdio': 'inherit'});
+        const merge_audio = spawn("ffmpeg", arg_list, {'stdio': 'pipe'});
             merge_audio.on('close', (code) => {
             console.log(`Merge-Audio exited with code ${code}`);
             resolve(0);
@@ -530,7 +553,7 @@ async function build_video(){
         "out/processed.flv"
     ]
     const promise = new Promise((resolve, reject) => {
-        const merge_video = spawn("ffmpeg", arg_list, {'stdio': 'inherit'});
+        const merge_video = spawn("ffmpeg", arg_list, {'stdio': 'pipe'});
         merge_video.on('close', (code) => {
             console.log(`Merge-Video exited with code ${code}`);
             resolve(0);
@@ -541,8 +564,8 @@ async function build_video(){
 async function rtxt_to_audiobook(content: string) {
     fsExtra.emptyDirSync("out/");
     fsExtra.emptyDirSync("temp/audio/");
-    fsExtra.emptyDirSync("temp/img/");
-    fsExtra.emptyDirSync("temp/docs/");
+    // fsExtra.emptyDirSync("temp/img/");
+    // fsExtra.emptyDirSync("temp/docs/");
     fsExtra.emptyDirSync("temp/ffmpeg/");
     
     const timestamps: TimestampedChapter[] = [];
@@ -550,39 +573,44 @@ async function rtxt_to_audiobook(content: string) {
     let current_durration = 0;
     let t = 0;
 
+    log_info(`Total Chapters: ${content.split(chapter_break()).length}`)
+
     for (const chapter of content.split(chapter_break())) {
         const lines = chapter.split("\n");
         let tI = 0;
         while (lines[tI] == "") tI++;
         const title = lines[tI];
-        const content = lines.slice(tI).join("\n");
-        const ff_file_path = `temp/audio/${t++}`;
-        ff_file_list.push(ff_file_path);
+        const ff_file_path = `temp/audio/${t++}.wav`;
+        ff_file_list.push('file ../' + ff_file_path);
 
         timestamps.push({
             title: title,
             timestamp: timestamp_to_string(current_durration),
         });
 
-        log_info(`Exporting Chapter -> ${italic(chapter)}`);
-        say.export(
-            chapter,
-            options.voice,
-            options.speed,
-            ff_file_path,
-            (err) => {
-                if (err) log_error(err);
-            },
-        );
-
-        current_durration += await getAudioDurationInSeconds(ff_file_path);
+        log_info(`Exporting Chapter -> ${italic(title)}`);
+        const promise = new Promise((resolve, reject) => {
+            // console.log(chapter);
+            say.export(
+                chapter,
+                options.voice,
+                options.speed,
+                ff_file_path,
+                (err) => {
+                    if (err) log_error(err);
+                    resolve(0);
+                },
+            );
+        });
+        await promise;
+        current_durration += await getAudioDurationInSeconds(ff_file_path, "C:\\ffmpeg\\bin\\ffprobe.exe");
     }
 
     const f_timestamps = timestamps
         .map((t) => `${t.title}: ${t.timestamp}`)
         .join("\n");
     fs.writeFileSync("out/timestamps.dat", f_timestamps);
-    fs.writeFileSync("temp/ffmpeg/audio_list.txt", ff_file_list.join('\n'));
+    fs.writeFileSync("temp/audio_list.txt", ff_file_list.join('\n'));
     await build_audio();
     await build_video();
 }
@@ -616,12 +644,12 @@ async function main() {
     if (opts.length == 0) {
         console.log(help_contents);
     } else if (opts[0][0] == "-lv") {
-        // say.getInstalledVoices((err, voices) => {
-        //     console.log(
-        //         green(bold("Installed Voices:\n") + italic(voices.join("\n"))),
-        //     );
-        //     console.log(bold(red(err)));
-        // });
+        say.getInstalledVoices((err, voices) => {
+            console.log(
+                green(bold("Installed Voices:\n") + italic(voices.join("\n"))),
+            );
+            console.log(bold(red(err)));
+        });
     } else if (opts[0][0] == "-i") {
         fsExtra.emptyDirSync("temp/downloads/");
         // [webnovel|jnovel|pdf|text]
@@ -671,15 +699,16 @@ async function main() {
                 process.exit(1);
         }
         if (rtext_content != undefined) {
+            rtext_content = rtext_content.replace(/(”|“)/g, "\"").replace(/’/g, '\'');
+            rtext_content = rtext_content.replace(/[^\x00-\x7F]+/g, ' ');
             log_info("Read Data");
+            await rtxt_to_audiobook(rtext_content);
             fs.writeFileSync("out/processed.roz.txt", rtext_content);
             fs.writeFileSync("out/processed.roz.docx", await docx_buffer(rtxt_to_docx(rtext_content)));
-            await rtxt_to_audiobook(rtext_content);
         } else {
             log_error("Undefined RText-Content");
             process.exit(1);
         }
     }
 }
-main();
-// main().then(() => process.exit());
+main().then(() => process.exit());
