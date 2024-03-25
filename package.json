@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@google-cloud/text-to-speech": "^5.1.0",
     "@kreisler/js-google-translate-free": "^2.0.2",
     "@types/cli-progress": "^3.11.5",
     "@types/jsdom": "^21.1.6",
@@ -21,6 +22,7 @@
     "pdf2json": "^3.0.5",
     "puppeteer": "^22.0.0",
     "puppeteer-core": "^22.5.0",
+    "puppeteer-google-translate": "^1.0.6",
     "say": "^0.16.0"
   }
 }
